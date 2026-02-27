@@ -2,46 +2,58 @@ import os, time, jwt
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy.orm import Session
-from app.services.github_service import (
-    get_github_login_url,
+from requests import Session
+from app import models
+from app.utils.dbUtils import get_current_user, get_db
+from app.services.github_service import (    
     exchange_code_for_token,
     get_user_email,
     get_user_info,
+    get_user_repos,
 )
+from app.utils.security import decrypt_token, encrypt_token
 from app.services.db_service import create_or_update_user
-from app.database import SessionLocal, get_db
-from app import models
-from app.utils.security import encrypt_token
-from dotenv import load_dotenv
 
-# Load environment variables from .env
-load_dotenv()
-
+CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+REDIRECT_URI = "http://localhost:8000/auth/callback"
 JWT_SECRET = os.getenv("JWT_SECRET")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRES_SECONDS = 60 * 60 * 24 * 365  # 365 days
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
+JWT_EXPIRES_SECONDS = 60 * 60 * 24 * 65  # 65 days
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 EXTENSION_REDIRECT=os.getenv("EXTENSION_REDIRECT")
 
 
-@router.get("/github")
-def auth_github():
-    return RedirectResponse(get_github_login_url())
+@router.get("/login")
+def auth_github(client_id: str, redirect_uri: str):
+        return RedirectResponse(
+        f"https://github.com/login/oauth/authorize"
+        f"?client_id={CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        f"&scope=public_repo,user:email"
+        f"&state={client_id}|{redirect_uri}"
+    )
 
 
 @router.get("/callback")
-def auth_callback(code: str, db: Session = Depends(get_db)):
-    token_json = exchange_code_for_token(code)
-    print("🔑 Token Response:", token_json)
+def auth_callback(code: str,state: str):
 
+    ext_client_id, ext_redirect_uri = state.split("|")
+
+    
+    print("JWT_SECRET:", JWT_SECRET)
+    print("JWT_ALGORITHM:", JWT_ALGORITHM)
+    token_json = exchange_code_for_token(code)
     access_token = token_json.get("access_token")
 
-    if not access_token:
-        return HTMLResponse("<h1>Auth failed</h1>", status_code=400)
+    print("🔑 Token Response:", token_json)
 
-    # user ka token sa os ki info get kr lo
+
+    if not access_token:
+        return HTMLResponse("<h1>Auth failed...</h1>", status_code=400)
+
+    # user ka token sa os ki info get kr lan
     user_info = get_user_info(access_token)
     username = user_info.get("login")
     avatar_url = user_info.get("avatar_url")
@@ -52,24 +64,25 @@ def auth_callback(code: str, db: Session = Depends(get_db)):
     
     # Save in DB
     try:
-        user = create_or_update_user(db, username, email, avatar_url, encrypted_token)
+        create_or_update_user( username, email, avatar_url, encrypted_token)
         payload = {
-        "sub": str(user.id),
+        "email": email,
         "username": username,
         "iat": int(time.time()),
         "exp": int(time.time()) + JWT_EXPIRES_SECONDS,
     }
         jwt_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-        redirect_uri = f"https://{EXTENSION_REDIRECT}.chromiumapp.org/provider_cb"
         final_url = (
-            f"{redirect_uri}"
+            f"{ext_redirect_uri}"
             f"?username={username}"
             f"&email={email}"
             f"&avatar_url={avatar_url}"
             f"&token={jwt_token}"
         )
+
         return RedirectResponse(final_url)
+
 
     except Exception as e:
         print("❌ DB save failed:", str(e))
@@ -77,18 +90,22 @@ def auth_callback(code: str, db: Session = Depends(get_db)):
 
 
 
-@router.get("/me")
-def get_user(username: str, db: Session = Depends(get_db)):
-    """Check if user is authenticated"""
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if not user:
-        return JSONResponse({"authenticated": False}, status_code=401)
+@router.get("/get-public-repo")
+def list_repos(current_user: models.User = Depends(get_current_user)):
+    try:
+        token = decrypt_token(current_user.github_token)
+        print("🔐 Decrypted token:", token)  
+        repos = get_user_repos(token)
+        return {"repos": repos}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
-    return JSONResponse({
-        "authenticated": True,
-        "username": user.username,
-        "email": user.email,
-        "repo_name": user.repo_name
-    })
+
+@router.post("/confirm-repo")
+def select_repo(repo_name: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.repo_name = repo_name
+    db.commit()
+    return {"message": "Repo selected", "repo_name": repo_name}
+
 
 

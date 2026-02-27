@@ -1,15 +1,15 @@
 import os, jwt
 from fastapi import Depends, Header, HTTPException
-from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from sqlalchemy.orm import Session
+from app.database import SessionLocal, Base
 from app import models
-from dotenv import load_dotenv
+import dotenv
 
-# Load environment variables from .env
-load_dotenv()
+dotenv.load_dotenv()
 
 JWT_SECRET = os.getenv("JWT_SECRET")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
 
 def get_db():
     db = SessionLocal()
@@ -18,7 +18,10 @@ def get_db():
 
 def get_current_user(authorization: str = Header(...), db: Session = Depends(get_db)) -> models.User:
     try:
+        print("JWT_SECRET:", JWT_SECRET)
+        print("JWT_ALGORITHM:", JWT_ALGORITHM)
         scheme, token = authorization.split()
+        print("Authorization header:", authorization, "Scheme:", scheme, "Token:", token)
         if scheme.lower() != "bearer":
             raise ValueError
     except Exception:
@@ -26,11 +29,12 @@ def get_current_user(authorization: str = Header(...), db: Session = Depends(get
 
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = int(payload["sub"])
+        user_email = payload["email"]
+        
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    user = db.query(models.User).filter(models.User.email == user_email).first()
     print("user* :", user.__dict__)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")

@@ -10,12 +10,13 @@ REDIRECT_URI = "http://localhost:8000/auth/callback"
 
 
 
-# def get_github_login_url():
-#     """Return GitHub OAuth login URL"""
-#     return (
-#         f"https://github.com/login/oauth/authorize"
-#         f"?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=public_repo,user:email"
-#     )
+def get_github_login_url():
+    print("======================")
+    """Return GitHub OAuth login URL"""
+    return (
+        f"https://github.com/login/oauth/authorize"
+        f"?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=public_repo,user:email"
+    )
 
 
 def exchange_code_for_token(code: str):

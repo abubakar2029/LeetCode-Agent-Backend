@@ -1,8 +1,5 @@
 import os
 from cryptography.fernet import Fernet
-from dotenv import load_dotenv
-
-load_dotenv()
 
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY")
 if not ENCRYPTION_KEY:

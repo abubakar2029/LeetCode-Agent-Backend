@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
-from app import models
 
-def create_or_update_user(db: Session, username: str, email: str, avatar_url: str, token: str):
+from app import models
+from app.utils.dbUtils import get_db
+
+def create_or_update_user(username: str, email: str, avatar_url: str, token: str):
+    db = next(get_db())  
     user = db.query(models.User).filter(models.User.username == username).first()
     if user:
         user.email = email
@@ -19,10 +21,16 @@ def create_or_update_user(db: Session, username: str, email: str, avatar_url: st
     db.refresh(user)
     return user
 
-def set_user_repo(db: Session, username: str, repo_name: str):
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if user:
-        user.repo_name = repo_name
-        db.commit()
-        db.refresh(user)
-    return user
+# def set_user_repo(db: Session, username: str, repo_name: str):
+#     user = db.query(models.User).filter(models.User.username == username).first()
+
+#     try:
+#         if user:
+#             user.repo_name = repo_name
+#             db.commit()
+#             db.refresh(user)
+#         return user
+#     except Exception as e:
+#         print("❌ Failed to set repo for user:", str(e))
+#         return None
+    

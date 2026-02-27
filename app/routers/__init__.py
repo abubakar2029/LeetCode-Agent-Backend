@@ -1,9 +1,6 @@
-from app.routers import auth, github,repos, recommendation
+from app.routers import auth
 
 # List of all routers to be included by the FastAPI app
 router_list = [
     auth.router,
-    github.router,
-    repos.router,
-    recommendation.router,
 ]
