@@ -45,8 +45,8 @@ backend/
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/abubakar2029/LeetCode-Agent.git
-cd LeetCode-Agent
+git clone https://github.com/abubakar2029/LeetCode-Agent-Backend.git
+cd LeetCode-Agent-Backend
 ```
 
 ### 2. Create a virtual environment
